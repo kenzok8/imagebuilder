@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-VERSION="${VERSION:-25.12-SNAPSHOT}"
+VERSION="${VERSION:-25.12.0}"
 TARGET="${TARGET:-x86/64}"
 PROFILE="${PROFILE:-generic}"
-IMAGEBUILDER_URL="${IMAGEBUILDER_URL:-https://downloads.immortalwrt.org/releases/25.12-SNAPSHOT/targets/x86/64/immortalwrt-imagebuilder-25.12-SNAPSHOT-x86-64.Linux-x86_64.tar.zst}"
+IMAGEBUILDER_URL="${IMAGEBUILDER_URL:-https://downloads.immortalwrt.org/releases/25.12.0/targets/x86/64/immortalwrt-imagebuilder-25.12.0-x86-64.Linux-x86_64.tar.zst}"
 EXTRA_IMAGE_NAME="${EXTRA_IMAGE_NAME:-daede}"
 OUT_DIR="${OUT_DIR:-$PWD/out}"
 PREFLIGHT="${PREFLIGHT:-1}"
