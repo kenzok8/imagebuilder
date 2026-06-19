@@ -4,7 +4,7 @@
 
 ## 中文
 
-构建一个 ImmortalWrt x86/64 KVM 测试固件，默认包含
+构建一个 ImmortalWrt x86/64 测试固件，默认包含
 [`luci-app-daede`](https://github.com/kenzok8/openwrt-daede) 以及运行
 `dae` / `daed` 所需的基础依赖。
 
