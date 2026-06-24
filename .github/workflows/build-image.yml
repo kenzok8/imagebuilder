@@ -94,17 +94,6 @@ jobs:
           chmod +x scripts/build-image.sh
           scripts/build-image.sh
 
-      - name: Write manifest
-        run: |
-          {
-            echo "date=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-            echo "imagebuilder_url=${{ inputs.imagebuilder_url }}"
-            cat "${{ github.workspace }}/out/.extra_packages" 2>/dev/null || true
-            echo
-            sha256sum out/* || true
-          } > out/BUILD-MANIFEST.txt
-          cat out/BUILD-MANIFEST.txt
-
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
@@ -117,7 +106,7 @@ jobs:
         uses: ncipollo/release-action@v1
         with:
           tag: daede-${{ github.run_number }}
-          name: daede image ${{ github.run_number }}
+          name: daede 固件 ${{ github.run_number }}
           artifacts: out/*
           allowUpdates: true
           replacesArtifacts: true
