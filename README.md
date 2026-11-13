@@ -53,11 +53,10 @@ ImmortalWrt feed。如果对应 feed 缺少某个依赖，构建会失败。
 
 - ImmortalWrt 25.12 内核默认启用 `CONFIG_DEBUG_INFO_BTF`。`dae` / `daed`
   会在运行时直接读取 `/sys/kernel/btf/vmlinux`，不需要单独安装
-  `vmlinux-btf`。
-- 不要把 `vmlinux-btf` 加入 `EXTRA_PACKAGES`。该包通常不会在 feed 中发布，
-  ImageBuilder 也不能自行编译它。
-- 如果要面向缺少内置 BTF 的旧版 OpenWrt，请先通过完整 SDK 构建
-  `vmlinux-btf`。
+  `vmlinux-btf`，也不要把 `vmlinux-btf` 加进 `EXTRA_PACKAGES`。
+- ImmortalWrt 24.10 内核没有内置 BTF，必须由脚本从 release 下载同内核版本的
+  `vmlinux-btf` IPK 放进本地包目录（见上面「24.10 线注意事项」），
+  ImageBuilder 本身无法编译它。
 
 ### 首次启动默认值
 
@@ -82,8 +81,9 @@ workflow 会把生成的固件作为 artifact 上传。当 `publish_release` 设
 常用输入项：
 
 - `publish_release`：是否发布到 GitHub Release，默认 `false`
-- `imagebuilder_url`：ImmortalWrt ImageBuilder 下载地址，默认使用
-  `25.12-SNAPSHOT` x86/64
+- `sdk_line`：SDK 版本线，`25.12-snapshot`（apk）或 `24.10-release`（opkg/ipk），默认 `25.12-snapshot`
+- `sdk_release`：`24.10-release` 线使用的具体版本，默认 `24.10.3`
+- `imagebuilder_url`：手动指定 ImageBuilder 下载地址；留空则按 `sdk_line` 自动拼
 - `preflight`：构建前是否先检查软件包清单，默认 `true`
 - `rootfs_partsize`：rootfs 分区大小，默认 `1024` MB
 - `install_daede`：是否把 `luci-app-daede` 打进固件，默认 `true`
@@ -92,6 +92,22 @@ workflow 会把生成的固件作为 artifact 上传。当 `publish_release` 设
 
 默认情况下不需要修改这些输入项，直接运行 workflow 即可生成内置
 `luci-app-daede` 的 x86/64 固件。
+
+### 24.10 线注意事项
+
+选 `24.10-release` 时，脚本按 ImageBuilder 自带的包管理器自动切到 ipk 流程，
+并且必须额外下载 `vmlinux-btf` IPK：
+
+- 24.10 内核没有 `CONFIG_DEBUG_INFO_BTF`，`dae` / `daed` 没有 BTF 无法加载。
+- `vmlinux-btf` 的文件名里带内核版本，必须和 ImageBuilder 的内核完全一致。
+  脚本会自己探测内核版本再去 release 里找对应的 IPK，找不到就直接失败，
+  不会打进版本不符的 BTF。
+- 内核 6.6 低于 netkit 需要的 6.7，所以 24.10 上 dae 只能走 veth，
+  没有 netkit 的转发性能。
+
+如果目标内核版本在 release 里还没有对应的 `vmlinux-btf`，先去
+`kenzok8/openwrt-daede` 的 `Build candidate matrix` 跑一次 SDK 24.10 构建，
+把 `btf_kernel_version` 填成目标版本（例如 `6.6.104`），产出对应 IPK 后再回来构建固件。
 
 也可通过环境变量覆盖 daede APK 来源：
 
@@ -185,8 +201,12 @@ Common inputs:
 
 - `publish_release`: publish the generated image to GitHub Releases, defaults to
   `false`
-- `imagebuilder_url`: ImmortalWrt ImageBuilder URL, defaults to `25.12-SNAPSHOT`
-  x86/64
+- `sdk_line`: `25.12-snapshot` (apk) or `24.10-release` (opkg/ipk), defaults to
+  `25.12-snapshot`
+- `sdk_release`: concrete release used by the `24.10-release` line, defaults to
+  `24.10.3`
+- `imagebuilder_url`: explicit ImageBuilder URL; when empty it is derived from
+  `sdk_line`
 - `preflight`: run the package manifest check before building, defaults to
   `true`
 - `rootfs_partsize`: rootfs partition size, defaults to `1024` MB
@@ -196,6 +216,13 @@ Common inputs:
 
 For the normal x86/64 build, leave the inputs unchanged and run the workflow.
 The generated image will include `luci-app-daede`.
+
+On the `24.10-release` line the script switches to ipk packaging and additionally
+pulls the `vmlinux-btf` IPK whose kernel version matches the ImageBuilder's own
+kernel, because 24.10 kernels ship without `CONFIG_DEBUG_INFO_BTF`. A kernel
+without a matching `vmlinux-btf` release asset fails the build instead of
+shipping a mismatched BTF. Note that 24.10 runs kernel 6.6, so dae falls back to
+veth: netkit requires 6.7+.
 
 You can override the daede APK source with environment variables:
 

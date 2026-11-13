@@ -11,10 +11,22 @@ on:
         options:
           - "true"
           - "false"
-      imagebuilder_url:
-        description: ImmortalWrt ImageBuilder 下载地址
+      sdk_line:
+        description: SDK 版本线（24.10 线走 opkg/ipk，25.12 线走 apk）
         required: true
-        default: "https://downloads.immortalwrt.org/releases/25.12-SNAPSHOT/targets/x86/64/immortalwrt-imagebuilder-25.12-SNAPSHOT-x86-64.Linux-x86_64.tar.zst"
+        default: "25.12-snapshot"
+        type: choice
+        options:
+          - "25.12-snapshot"
+          - "24.10-release"
+      sdk_release:
+        description: 24.10-release 线使用的具体版本
+        required: true
+        default: "24.10.3"
+      imagebuilder_url:
+        description: 手动指定 ImageBuilder 下载地址；留空则按 sdk_line 自动拼
+        required: false
+        default: ""
       preflight:
         description: 构建前先检查软件包清单是否齐全
         required: true
@@ -82,6 +94,8 @@ jobs:
 
       - name: Build image
         env:
+          SDK_LINE: ${{ inputs.sdk_line }}
+          SDK_RELEASE: ${{ inputs.sdk_release }}
           IMAGEBUILDER_URL: ${{ inputs.imagebuilder_url }}
           PREFLIGHT: ${{ inputs.preflight }}
           ROOTFS_PARTSIZE: ${{ inputs.rootfs_partsize }}
