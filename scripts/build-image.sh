@@ -94,16 +94,6 @@ detect_pkg_format() {
   fi
 }
 
-# 从 ImageBuilder 自带的构建目录取内核版本，ipk 线全靠它对齐 vmlinux-btf
-detect_kernel_version() {
-  local ib="$1" v=""
-  v=$(find "$ib/build_dir" -maxdepth 3 -type d -name 'linux-[0-9]*' 2>/dev/null | head -1 | sed 's|.*/linux-||')
-  if [ -z "$v" ]; then
-    v=$(find "$ib" -maxdepth 6 -name 'kernel_[0-9]*.ipk' 2>/dev/null | head -1 | sed 's|.*/kernel_||; s|~.*||')
-  fi
-  printf '%s' "$v"
-}
-
 install_daede_apk() {
   case "$INSTALL_DAEDE" in
     1|true|yes) ;;
@@ -134,10 +124,9 @@ install_daede_apk() {
     -o "$packages_dir/$fname" "$daede_url"
 }
 
-# 24.10 线：内核不带 BTF，必须把 vmlinux-btf 一起放进本地包目录；
-# dae / daed 仍取所选 ImmortalWrt feed 里的版本。
+# 24.10 线：包格式是 opkg/ipk，dae / daed 与 kmod 从所选 ImmortalWrt feed 取。
+# 24.10.3 内核自带 CONFIG_DEBUG_INFO_BTF，不需要额外的 vmlinux-btf。
 install_daede_ipk() {
-  local kernel_version="$1"
   local packages_dir="$WORK_DIR/imagebuilder/packages"
   mkdir -p "$packages_dir"
 
@@ -150,20 +139,6 @@ install_daede_ipk() {
   else
     echo "Skipping luci-app-daede release IPK download."
   fi
-
-  # 内核与 BTF 必须同版本，差一个小版本都会让 dae 加载失败。
-  if [ -z "$kernel_version" ]; then
-    echo "ERROR: cannot detect kernel version from the ImageBuilder, refusing to guess a vmlinux-btf version." >&2
-    return 1
-  fi
-
-  local btf_url
-  btf_url="$(resolve_release_asset "vmlinux-btf_${kernel_version}-" "_${DAEDE_ARCH}.ipk" "vmlinux-btf IPK for kernel ${kernel_version}")"
-  echo "Downloading vmlinux-btf IPK: $btf_url"
-  curl -L --retry 8 --retry-delay 5 --connect-timeout 30 \
-    -o "$packages_dir/${btf_url##*/}" "$btf_url"
-
-  echo "vmlinux-btf pinned to kernel $kernel_version"
 }
 
 if [ ! -s "$IB_ARCHIVE" ]; then
@@ -183,13 +158,7 @@ case "$PKG_FORMAT" in
     install_daede_apk
     ;;
   ipk)
-    KERNEL_VERSION="$(detect_kernel_version "$WORK_DIR/imagebuilder")"
-    install_daede_ipk "$KERNEL_VERSION"
-    # vmlinux-btf 只存在于 release，不在 feed，必须显式加进包列表
-    case " $EXTRA_PACKAGES " in
-      *" vmlinux-btf "*) ;;
-      *) EXTRA_PACKAGES="$EXTRA_PACKAGES vmlinux-btf" ;;
-    esac
+    install_daede_ipk
     ;;
   *)
     echo "ERROR: unsupported package format $PKG_FORMAT" >&2
@@ -200,21 +169,16 @@ case "$PKG_FORMAT" in
 cd "$WORK_DIR/imagebuilder"
 
 # ipk 线要先建索引，否则 preflight 的 make manifest 看不见刚放进 packages/ 的包。
-# 24.10 的 ImageBuilder 默认开着 CONFIG_SIGNATURE_CHECK，但镜像里没有 key-build，
-# ipk 索引的 usign 步骤会直接把 make 打挂；apk 线有 --allow-untrusted 兜底，ipk 没有。
+# 24.10 的 ImageBuilder 开着 CONFIG_SIGNATURE_CHECK 却未预生成 key-build，
+# 直接建索引会卡在 usign，所以先用它自带的 _check_keys 生成一对本地密钥。
 if [ "$PKG_FORMAT" = "ipk" ]; then
-  sed -i \
-    -e 's/^CONFIG_SIGNATURE_CHECK=y/# CONFIG_SIGNATURE_CHECK is not set/' \
-    .config
+  make _check_keys
   echo "Rebuilding local opkg index..."
   make package_index
 fi
 
 echo "SDK line: $SDK_LINE ($IB_RELEASE)"
 echo "Package format: $PKG_FORMAT"
-if [ "$PKG_FORMAT" = "ipk" ]; then
-  echo "Kernel (vmlinux-btf match): ${KERNEL_VERSION:-unknown}"
-fi
 echo "Version: $VERSION"
 echo "Target: $TARGET"
 echo "Profile: $PROFILE"
@@ -240,17 +204,13 @@ Common causes for this daede image:
   directory, or its architecture does not match the selected target.
 
 About BTF:
-- 25.12 kernels enable CONFIG_DEBUG_INFO_BTF by default, so dae/daed reads
-  /sys/kernel/btf/vmlinux directly and needs no vmlinux-btf package.
-- 24.10 kernels do NOT (# CONFIG_DEBUG_INFO_BTF is not set), so the image must carry the
-  matching vmlinux-btf IPK from the kenzok8/openwrt-daede release. Its filename embeds
-  the kernel version; a mismatch between the ImageBuilder kernel and that package is the
-  most common 24.10 failure. ImageBuilder cannot compile vmlinux-btf itself.
+- ImmortalWrt 24.10 and 25.12 kernels both enable CONFIG_KERNEL_DEBUG_INFO_BTF, so
+  dae/daed reads /sys/kernel/btf/vmlinux directly and needs no extra package.
+- Do not add vmlinux-btf to EXTRA_PACKAGES: it is not published in the feed and
+  ImageBuilder cannot compile packages.
 
 Next choices:
 - Retry later with the same SDK line URL after ImmortalWrt feeds finish syncing.
-- For 24.10, set SDK_RELEASE to a release whose vmlinux-btf IPK exists in the daede
-  release, or rebuild vmlinux-btf for that kernel via the openwrt-daede SDK gate first.
 - Override DAEDE_RELEASE_TAG, DAEDE_ARCH, or DAEDE_APK_URL if you need a specific
   luci-app-daede release asset.
 - Verify kmod-* packages exist for the target+kernel combo via:
@@ -302,10 +262,9 @@ fi
 	done > sha256sums
 	# Build date in CST for release notes
 	BUILD_DATE="$(TZ='Asia/Shanghai' date '+%F %H:%M CST')"
-	BTF_NOTE=""
+	NETKIT_NOTE=""
 	if [ "$PKG_FORMAT" = "ipk" ]; then
-		BTF_NOTE="- **内核 BTF**：vmlinux-btf ${KERNEL_VERSION}（24.10 内核不带内置 BTF）
-- **Netkit**：不可用（内核 6.6 < 6.7），dae 自动回落 veth"
+		NETKIT_NOTE="- **Netkit**：不可用（内核 6.6 < 6.7），dae 自动回落 veth"
 	fi
 	cat > BUILD-MANIFEST.txt <<BODYEOF
 ## daede 固件 · ${EXTRA_IMAGE_NAME}
@@ -329,7 +288,7 @@ fi
 - **启动**：EFI
 - **根分区大小**：${ROOTFS_PARTSIZE} MB
 - **SDK 线**：${SDK_LINE} · ${IB_RELEASE} · ${PKG_FORMAT}
-${BTF_NOTE}
+${NETKIT_NOTE}
 - **构建日期**：${BUILD_DATE}
 - **ImageBuilder**：${IMAGEBUILDER_URL}
 

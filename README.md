@@ -51,12 +51,10 @@ ImmortalWrt feed。如果对应 feed 缺少某个依赖，构建会失败。
 
 关于 BTF：
 
-- ImmortalWrt 25.12 内核默认启用 `CONFIG_DEBUG_INFO_BTF`。`dae` / `daed`
-  会在运行时直接读取 `/sys/kernel/btf/vmlinux`，不需要单独安装
-  `vmlinux-btf`，也不要把 `vmlinux-btf` 加进 `EXTRA_PACKAGES`。
-- ImmortalWrt 24.10 内核没有内置 BTF，必须由脚本从 release 下载同内核版本的
-  `vmlinux-btf` IPK 放进本地包目录（见上面「24.10 线注意事项」），
-  ImageBuilder 本身无法编译它。
+- ImmortalWrt 24.10 和 25.12 的内核都启用了 `CONFIG_KERNEL_DEBUG_INFO_BTF`。
+  `dae` / `daed` 会在运行时直接读取 `/sys/kernel/btf/vmlinux`，不需要单独安装
+  `vmlinux-btf`，也不要把 `vmlinux-btf` 加进 `EXTRA_PACKAGES`：
+  ImageBuilder 无法编译包。
 
 ### 首次启动默认值
 
@@ -96,18 +94,13 @@ workflow 会把生成的固件作为 artifact 上传。当 `publish_release` 设
 ### 24.10 线注意事项
 
 选 `24.10-release` 时，脚本按 ImageBuilder 自带的包管理器自动切到 ipk 流程，
-并且必须额外下载 `vmlinux-btf` IPK：
+只把 `luci-app-daede` 的 noarch IPK 放进本地包目录，`dae` / `daed` 和 kmod
+仍取自所选 ImmortalWrt feed。
 
-- 24.10 内核没有 `CONFIG_DEBUG_INFO_BTF`，`dae` / `daed` 没有 BTF 无法加载。
-- `vmlinux-btf` 的文件名里带内核版本，必须和 ImageBuilder 的内核完全一致。
-  脚本会自己探测内核版本再去 release 里找对应的 IPK，找不到就直接失败，
-  不会打进版本不符的 BTF。
+- 24.10 与 25.12 的内核都开了 `CONFIG_KERNEL_DEBUG_INFO_BTF`，不需要额外装
+  `vmlinux-btf`。
 - 内核 6.6 低于 netkit 需要的 6.7，所以 24.10 上 dae 只能走 veth，
   没有 netkit 的转发性能。
-
-如果目标内核版本在 release 里还没有对应的 `vmlinux-btf`，先去
-`kenzok8/openwrt-daede` 的 `Build candidate matrix` 跑一次 SDK 24.10 构建，
-把 `btf_kernel_version` 填成目标版本（例如 `6.6.104`），产出对应 IPK 后再回来构建固件。
 
 也可通过环境变量覆盖 daede APK 来源：
 
@@ -168,13 +161,11 @@ feed problems earlier, especially:
 
 About BTF:
 
-- ImmortalWrt 25.12 kernels enable `CONFIG_DEBUG_INFO_BTF` by default. `dae` /
-  `daed` read BTF directly from `/sys/kernel/btf/vmlinux` at runtime and do not
-  require a separate `vmlinux-btf` package.
-- Do not add `vmlinux-btf` to `EXTRA_PACKAGES`. It is usually not published in
-  the feed, and ImageBuilder cannot build it.
-- If you target an older OpenWrt release whose kernel lacks built-in BTF, build
-  `vmlinux-btf` with a full SDK build first.
+- ImmortalWrt 24.10 and 25.12 kernels both enable
+  `CONFIG_KERNEL_DEBUG_INFO_BTF`. `dae` / `daed` read BTF directly from
+  `/sys/kernel/btf/vmlinux` at runtime and need no extra package.
+- Do not add `vmlinux-btf` to `EXTRA_PACKAGES`. It is not published in the feed,
+  and ImageBuilder cannot build packages.
 
 ### First Boot Defaults
 
@@ -217,12 +208,10 @@ Common inputs:
 For the normal x86/64 build, leave the inputs unchanged and run the workflow.
 The generated image will include `luci-app-daede`.
 
-On the `24.10-release` line the script switches to ipk packaging and additionally
-pulls the `vmlinux-btf` IPK whose kernel version matches the ImageBuilder's own
-kernel, because 24.10 kernels ship without `CONFIG_DEBUG_INFO_BTF`. A kernel
-without a matching `vmlinux-btf` release asset fails the build instead of
-shipping a mismatched BTF. Note that 24.10 runs kernel 6.6, so dae falls back to
-veth: netkit requires 6.7+.
+On the `24.10-release` line the script switches to ipk packaging and only drops
+the noarch `luci-app-daede` IPK into the local package directory; `dae` / `daed`
+and the kmods still come from the selected ImmortalWrt feed. Note that 24.10 runs
+kernel 6.6, so dae falls back to veth: netkit requires 6.7+.
 
 You can override the daede APK source with environment variables:
 
