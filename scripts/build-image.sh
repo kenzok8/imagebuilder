@@ -191,7 +191,7 @@ echo "Extra packages: $EXTRA_PACKAGES"
 echo "Install daede: $INSTALL_DAEDE"
 echo "Daede release: $DAEDE_REPO@$DAEDE_RELEASE_TAG ($DAEDE_ARCH)"
 mkdir -p "$OUT_DIR"
-echo "extra_packages=$EXTRA_PACKAGES" > "$OUT_DIR/.extra_packages"
+echo "$EXTRA_PACKAGES" > "$OUT_DIR/.extra_packages"
 
 diagnose_failure() {
   cat >&2 <<'EOF'
@@ -279,7 +279,7 @@ fi
 "
 	fi
 	cat > BUILD-MANIFEST.txt <<BODYEOF
-## daede 固件 · ${EXTRA_IMAGE_NAME}
+## daede 固件 · ${IB_RELEASE}
 
 基于 ImmortalWrt ${IB_RELEASE}，x86-64 通用镜像，squashfs-only。
 
@@ -291,7 +291,7 @@ fi
 | **qcow2** | QEMU / Proxmox VE | daede-squashfs-efi.qcow2 |
 | **vmdk** | VMware ESXi / Workstation | daede-squashfs-efi.vmdk |
 
-> 额外：`daede-rootfs.tar.gz` 裸文件系统，可用于 LXC 容器转换。
+> 额外：\`daede-rootfs.tar.gz\` 裸文件系统，可用于 LXC 容器转换。
 
 ### 镜像详情
 
