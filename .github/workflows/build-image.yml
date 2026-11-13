@@ -93,6 +93,7 @@ jobs:
             genisoimage
 
       - name: Build image
+        id: build
         env:
           SDK_LINE: ${{ inputs.sdk_line }}
           SDK_RELEASE: ${{ inputs.sdk_release }}
@@ -111,7 +112,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
-          name: immortalwrt-daede-x86-64
+          name: immortalwrt-daede-x86-64-${{ steps.build.outputs.ib_release }}
           path: out/*
           if-no-files-found: error
 
@@ -119,8 +120,8 @@ jobs:
         if: inputs.publish_release == 'true'
         uses: ncipollo/release-action@v1
         with:
-          tag: daede-${{ github.run_number }}
-          name: daede 固件 ${{ github.run_number }}
+          tag: daede-${{ steps.build.outputs.ib_release }}-${{ github.run_number }}
+          name: daede 固件 · ${{ steps.build.outputs.ib_release }} · ${{ github.run_number }}
           artifacts: out/*
           allowUpdates: true
           replacesArtifacts: true

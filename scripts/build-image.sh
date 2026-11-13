@@ -179,6 +179,10 @@ fi
 
 echo "SDK line: $SDK_LINE ($IB_RELEASE)"
 echo "Package format: $PKG_FORMAT"
+if [ -n "${GITHUB_OUTPUT:-}" ]; then
+  echo "ib_release=$IB_RELEASE" >> "$GITHUB_OUTPUT"
+  echo "pkg_format=$PKG_FORMAT" >> "$GITHUB_OUTPUT"
+fi
 echo "Version: $VERSION"
 echo "Target: $TARGET"
 echo "Profile: $PROFILE"
@@ -263,8 +267,16 @@ fi
 	# Build date in CST for release notes
 	BUILD_DATE="$(TZ='Asia/Shanghai' date '+%F %H:%M CST')"
 	NETKIT_NOTE=""
+	IPK_NOTE=""
 	if [ "$PKG_FORMAT" = "ipk" ]; then
 		NETKIT_NOTE="- **Netkit**：不可用（内核 6.6 < 6.7），dae 自动回落 veth"
+		IPK_NOTE="### 24.10 线说明
+
+- 内核 6.6，低于 netkit 需要的 6.7，\`dae\` / \`daed\` 走 veth 转发，没有 netkit 的快速路径。
+- 适合千兆家用 / PPPoE 宽带；万兆网卡或大量小包并发才会显出差距。
+- 包格式为 opkg/ipk，只把 \`luci-app-daede\` 的 IPK 打进固件，\`dae\` / \`daed\` 和 kmod 来自所选 ImmortalWrt feed。
+- 内核自带 BTF，不需要额外的 \`vmlinux-btf\`。
+"
 	fi
 	cat > BUILD-MANIFEST.txt <<BODYEOF
 ## daede 固件 · ${EXTRA_IMAGE_NAME}
@@ -292,6 +304,7 @@ ${NETKIT_NOTE}
 - **构建日期**：${BUILD_DATE}
 - **ImageBuilder**：${IMAGEBUILDER_URL}
 
+${IPK_NOTE}
 ### 预装软件
 
 \`$(cat "$OUT_DIR/.extra_packages" 2>/dev/null || echo "$EXTRA_PACKAGES")\`
